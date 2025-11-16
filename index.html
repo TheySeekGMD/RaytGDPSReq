@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>RaytGDPS</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<style>
+    body {
+        margin: 0;
+        padding: 0;
+        background: #02060f;
+        font-family: Arial, sans-serif;
+        color: #fff;
+        overflow-x: hidden;
+        min-height: 100vh;
+    }
+
+    #snow-canvas {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+        opacity: 0.7;
+        z-index: 1;
+    }
+
+    .screen {
+        display: none;
+        flex-direction: column;
+        align-items: center;
+        width: 100%;
+        position: relative;
+        z-index: 2;
+        padding-top: 40px;
+    }
+
+    .title {
+        font-size: clamp(32px, 6vw, 56px);
+        font-weight: bold;
+        margin-bottom: 40px;
+        text-align: center;
+    }
+
+    .button {
+        background-color: #0a0f1f;
+        color: #00f;
+        border: 3px solid #00f;
+        border-radius: 16px;
+        padding: clamp(12px, 2vw, 20px) clamp(30px, 5vw, 60px);
+        margin: 15px;
+        font-size: clamp(18px, 2.5vw, 28px);
+        cursor: pointer;
+        transition: 0.3s;
+        z-index: 3;
+    }
+
+    .button:hover {
+        background-color: #001133;
+        box-shadow: 0 0 20px #00f;
+    }
+
+    input {
+        width: 80%;
+        max-width: 350px;
+        padding: 12px;
+        font-size: 20px;
+        border-radius: 10px;
+        border: 2px solid #00f;
+        background: #111727;
+        color: #fff;
+        outline: none;
+        margin-bottom: 20px;
+    }
+
+    #title-container {
+        font-size: clamp(36px, 6vw, 64px);
+        font-weight: bold;
+        letter-spacing: 2px;
+        white-space: nowrap;
+        text-align: center;
+        margin-bottom: 60px;
+    }
+
+    table {
+        width: 90%;
+        max-width: 700px;
+        border-collapse: collapse;
+        margin-top: 20px;
+        background: #0a0f1f;
+        border: 2px solid #00f;
+        border-radius: 12px;
+        overflow: hidden;
+    }
+
+    th, td {
+        border-bottom: 1px solid #003;
+        padding: 14px;
+        text-align: center;
+        font-size: 20px;
+    }
+
+    th {
+        background: #001133;
+    }
+
+    .delbtn {
+        background: #330000;
+        border: 2px solid red;
+        padding: 8px 22px;
+        border-radius: 10px;
+        color: red;
+        cursor: pointer;
+        font-size: 18px;
+    }
+</style>
+</head>
+<body>
+
+<canvas id="snow-canvas"></canvas>
+
+<div id="auth-screen" class="screen">
+    <div class="title">Войдите чтобы начать</div>
+    <button class="button" onclick="openLogin()">Войти</button>
+    <button class="button" onclick="openRegister()">Зарегистрироваться</button>
+</div>
+
+<div id="login-screen" class="screen">
+    <div class="title">Вход</div>
+    <input id="login-nick" placeholder="Ник">
+    <input id="login-pass" placeholder="Пароль" type="password">
+    <button class="button" onclick="login()">Войти</button>
+    <button class="button" onclick="backToAuth()">Назад</button>
+</div>
+
+<div id="register-screen" class="screen">
+    <div class="title">Регистрация</div>
+    <input id="reg-nick" placeholder="Ник">
+    <input id="reg-pass" placeholder="Пароль" type="password">
+    <button class="button" onclick="register()">Создать аккаунт</button>
+    <button class="button" onclick="backToAuth()">Назад</button>
+</div>
+
+<div id="main-screen" class="screen">
+    <div id="title-container"></div>
+    <button class="button" onclick="openSend()">Отправить уровень</button>
+    <button class="button" id="req-btn" style="display:none;" onclick="openRequests()">Реквесты</button>
+</div>
+
+<div id="send-screen" class="screen">
+    <div class="title">Отправить уровень</div>
+    <input id="lv-name" placeholder="Название уровня">
+    <input id="lv-author" placeholder="Автор">
+    <input id="lv-id" placeholder="Айди уровня">
+    <input id="lv-pd" placeholder="Предполагаемая сложность (PD)">
+    <button class="button" onclick="sendLevel()">Отправить</button>
+    <button class="button" onclick="backMain()">Назад</button>
+</div>
+
+<div id="requests-screen" class="screen">
+    <div class="title">Реквесты</div>
+    <table>
+        <thead>
+            <tr>
+                <th>Название</th>
+                <th>Автор</th>
+                <th>ID</th>
+                <th>PD</th>
+                <th>Удалить</th>
+            </tr>
+        </thead>
+        <tbody id="req-table"></tbody>
+    </table>
+    <button class="button" onclick="backMain()">Назад</button>
+</div>
+
+<script>
+const dbUsers = "https://rayt-gdps-req-default-rtdb.firebaseio.com/users";
+const dbReqs  = "https://rayt-gdps-req-default-rtdb.firebaseio.com/requests";
+
+let currentUser = "";
+
+hideAll();
+document.getElementById("auth-screen").style.display = "flex";
+
+function hideAll() {
+    document.querySelectorAll(".screen").forEach(s => s.style.display = "none");
+}
+
+function openLogin() {
+    hideAll();
+    document.getElementById("login-screen").style.display = "flex";
+}
+
+function openRegister() {
+    hideAll();
+    document.getElementById("register-screen").style.display = "flex";
+}
+
+function backToAuth() {
+    hideAll();
+    document.getElementById("auth-screen").style.display = "flex";
+}
+
+async function register() {
+    const nick = document.getElementById("reg-nick").value.trim();
+    const pass = document.getElementById("reg-pass").value.trim();
+    if (!nick || !pass) return;
+    const check = await fetch(`${dbUsers}/${nick}.json`).then(r=>r.json());
+    if (check !== null) return;
+    await fetch(`${dbUsers}/${nick}.json`, {
+        method: "PUT",
+        body: JSON.stringify({ password: pass })
+    });
+    openLogin();
+}
+
+async function login() {
+    const nick = document.getElementById("login-nick").value.trim();
+    const pass = document.getElementById("login-pass").value.trim();
+    if (!nick || !pass) return;
+    const data = await fetch(`${dbUsers}/${nick}.json`).then(r=>r.json());
+    if (!data || data.password !== pass) return;
+    currentUser = nick;
+    hideAll();
+    document.getElementById("main-screen").style.display = "flex";
+    if (nick === "Rayt") document.getElementById("req-btn").style.display = "inline-block";
+}
+
+function openSend() {
+    hideAll();
+    document.getElementById("send-screen").style.display = "flex";
+}
+
+function backMain() {
+    hideAll();
+    document.getElementById("main-screen").style.display = "flex";
+}
+
+async function sendLevel() {
+    const name = document.getElementById("lv-name").value.trim();
+    const author = document.getElementById("lv-author").value.trim();
+    const id = document.getElementById("lv-id").value.trim();
+    const pd = document.getElementById("lv-pd").value.trim();
+    if (!name || !author || !id || !pd) return;
+    const obj = { name, author, id, pd };
+    await fetch(`${dbReqs}.json`, {
+        method: "POST",
+        body: JSON.stringify(obj)
+    });
+    backMain();
+}
+
+async function openRequests() {
+    hideAll();
+    document.getElementById("requests-screen").style.display = "flex";
+    const table = document.getElementById("req-table");
+    table.innerHTML = "";
+    const data = await fetch(`${dbReqs}.json`).then(r=>r.json());
+    if (!data) return;
+    Object.keys(data).forEach(key => {
+        const r = data[key];
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+            <td>${r.name}</td>
+            <td>${r.author}</td>
+            <td>${r.id}</td>
+            <td>${r.pd}</td>
+            <td><button class="delbtn" onclick="delReq('${key}')">X</button></td>
+        `;
+        table.appendChild(tr);
+    });
+}
+
+async function delReq(id) {
+    await fetch(`${dbReqs}/${id}.json`, { method: "DELETE" });
+    openRequests();
+}
+
+const element = document.getElementById("title-container");
+const text = "Rayt GDPS Req";
+let charIndex = 0;
+let isDeleting = false;
+let delay = false;
+
+function type() {
+    if (delay) return;
+    if (!isDeleting) {
+        element.textContent = text.substring(0, charIndex + 1);
+        charIndex++;
+        if (charIndex === text.length) {
+            isDeleting = true;
+            delay = true;
+            setTimeout(() => delay = false, 3000);
+        }
+    } else {
+        element.textContent = text.substring(0, charIndex - 1);
+        charIndex--;
+        if (charIndex === 0) isDeleting = false;
+    }
+    setTimeout(type, isDeleting ? 60 : 90);
+}
+type();
+
+const canvas = document.getElementById("snow-canvas");
+const ctx = canvas.getContext("2d");
+
+let w, h;
+function resize() {
+    w = canvas.width = window.innerWidth;
+    h = canvas.height = window.innerHeight;
+}
+resize();
+window.onresize = resize;
+
+let flakes = [];
+for (let i = 0; i < 120; i++) {
+    flakes.push({ x: Math.random() * w, y: Math.random() * h, r: Math.random() * 3 + 1, s: Math.random() * 1 + 0.2 });
+}
+
+function snow() {
+    ctx.clearRect(0, 0, w, h);
+    ctx.fillStyle = "#ffffff";
+    flakes.forEach(f => {
+        ctx.beginPath();
+        ctx.arc(f.x, f.y, f.r, 0, Math.PI * 2);
+        ctx.fill();
+        f.y += f.s;
+        if (f.y > h) f.y = -10;
+    });
+    requestAnimationFrame(snow);
+}
+snow();
+</script>
+
+</body>
+</html>
